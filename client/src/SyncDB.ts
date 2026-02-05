@@ -1,5 +1,5 @@
 import init, { CrdtStore } from 'crdt_core';
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
 interface SyncDBSchema extends DBSchema {
   crdt_store: {
@@ -42,10 +42,24 @@ export class SyncDB {
 
     // 2. Load state from IDB
     const db = await this.dbPromise;
-    const storedState = await db.get('crdt_store', 'full_state');
-    if (storedState) {
-        console.log('Loading state from IDB', storedState);
-        this.crdt.load_state(storedState);
+    // Granular load
+    const tx = db.transaction('crdt_store', 'readonly');
+    const store = tx.objectStore('crdt_store');
+    const keys = await store.getAllKeys();
+    const values = await store.getAll();
+    await tx.done;
+
+    const updates = keys.map((key, i) => ({
+        key: key as string,
+        record: values[i]
+    }));
+
+    // Filter out potential 'full_state' if it exists from previous version
+    const validUpdates = updates.filter(u => u.key !== 'full_state');
+
+    if (validUpdates.length > 0) {
+        console.log(`Loading ${validUpdates.length} records from IDB`);
+        this.crdt.load_bulk(validUpdates);
     }
   }
 
@@ -69,7 +83,10 @@ export class SyncDB {
             console.log('Received update', update);
             const changed = this.crdt.merge(update);
             if (changed) {
-                await this.saveState();
+                // Granular save
+                const db = await this.dbPromise;
+                await db.put('crdt_store', update.record, update.key);
+
                 // The update object has structure { key: "...", record: { value: ... } }
                 this.notify(update.key, update.record.value);
             }
@@ -79,13 +96,6 @@ export class SyncDB {
     };
   }
 
-  private async saveState() {
-      if (!this.crdt) return;
-      const state = this.crdt.get_state();
-      const db = await this.dbPromise;
-      await db.put('crdt_store', state, 'full_state');
-  }
-
   public async set(key: string, value: any) {
       await this.readyPromise;
       if (!this.crdt) throw new Error("CRDT not initialized");
@@ -93,15 +103,18 @@ export class SyncDB {
       const updateMsg = this.crdt.set(key, value);
       const msgStr = JSON.stringify(updateMsg);
 
-      // Persist locally
-      await this.saveState();
+      // Persist locally (Granular)
+      const db = await this.dbPromise;
+      // We need to extract the record from the update message.
+      // updateMsg is a JS object { key: "...", record: {...} }
+      // but in TypeScript it's typed as any here (coming from wasm-bindgen).
+      await db.put('crdt_store', updateMsg.record, updateMsg.key);
 
       // Send to server or queue
       if (this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(msgStr);
       } else {
           console.log('Offline, queueing update');
-          const db = await this.dbPromise;
           await db.add('queue', msgStr);
       }
 
