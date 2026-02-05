@@ -131,6 +131,29 @@ export class SyncDB {
       this.notify(key, value);
   }
 
+  public async delete(key: string) {
+      await this.readyPromise;
+      if (!this.crdt) throw new Error("CRDT not initialized");
+
+      const updateMsg = this.crdt.delete(key);
+      const msgStr = JSON.stringify(updateMsg);
+
+      // Persist locally (Granular)
+      const db = await this.dbPromise;
+      await db.put('crdt_store', updateMsg.record, updateMsg.key);
+
+      // Send to server or queue
+      if (this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(msgStr);
+      } else {
+          console.log('Offline, queueing update');
+          await db.add('queue', msgStr);
+      }
+
+      // Notify with null to indicate deletion
+      this.notify(key, null);
+  }
+
   private async processQueue() {
       const db = await this.dbPromise;
       let cursor = await db.transaction('queue', 'readwrite').store.openCursor();
