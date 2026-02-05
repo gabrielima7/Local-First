@@ -12,6 +12,13 @@ const status = document.getElementById('status') as HTMLDivElement;
 
 function renderItem(key: string, record: any) {
     let li = document.getElementById(`item-${key}`);
+
+    // Handle Tombstone (Delete)
+    if (record.value === null || record.value === undefined) {
+        if (li) li.remove();
+        return;
+    }
+
     if (!li) {
         li = document.createElement('li');
         li.id = `item-${key}`;
@@ -28,8 +35,16 @@ function renderItem(key: string, record: any) {
     spanMeta.className = 'meta';
     spanMeta.textContent = `ts: ${record.timestamp.toFixed(0)} | node: ${record.node_id}`;
 
+    const delBtn = document.createElement('button');
+    delBtn.innerText = '❌';
+    delBtn.style.marginLeft = '10px';
+    delBtn.onclick = async () => {
+        await db.delete(key);
+    };
+
     li.appendChild(spanKey);
     li.appendChild(spanMeta);
+    li.appendChild(delBtn);
 
     // Flash effect
     li.style.backgroundColor = '#dff0d8';
@@ -41,12 +56,14 @@ async function refreshAll() {
     const all = await db.getAll();
     // Assuming all is a Map-like object { key: record }
     if (all instanceof Map) {
-         all.forEach((record, key) => renderItem(key, record));
+         all.forEach((record, key) => {
+            if (record.value !== null && record.value !== undefined) renderItem(key, record);
+         });
     } else {
         // If it's a plain object
         for (const [key, record] of Object.entries(all)) {
-            renderItem(key, record);
-        }
+            if (record.value !== null && record.value !== undefined) renderItem(key, record);
+         }
     }
 }
 

@@ -59,6 +59,26 @@ impl CrdtStore {
         Ok(serde_wasm_bindgen::to_value(&update)?)
     }
 
+    /// Delete a value (Tombstone). Returns the UpdateMessage to be broadcasted.
+    pub fn delete(&mut self, key: String) -> Result<JsValue, JsValue> {
+        let timestamp = js_sys::Date::now();
+
+        let record = LwwRecord {
+            value: serde_json::Value::Null,
+            timestamp,
+            node_id: self.node_id.clone(),
+        };
+
+        self.store.insert(key.clone(), record.clone());
+
+        let update = UpdateMessage {
+            key,
+            record,
+        };
+
+        Ok(serde_wasm_bindgen::to_value(&update)?)
+    }
+
     /// Get a value.
     pub fn get(&self, key: String) -> Result<JsValue, JsValue> {
         match self.store.get(&key) {
