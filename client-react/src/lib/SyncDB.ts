@@ -23,7 +23,12 @@ export class SyncDB {
   public status: 'online' | 'offline' | 'syncing' = 'offline';
 
   constructor(serverUrl: string, nodeId: string) {
-    this.ws = new WebSocket(serverUrl);
+    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
+    // Maintain query string (e.g. ?room=...) from the passed serverUrl if present
+    const url = new URL(serverUrl);
+    const search = url.search;
+
+    this.ws = new WebSocket(wsUrl + search);
     this.dbPromise = openDB<SyncDBSchema>('sync-db', 2, {
       upgrade(db) {
         if (!db.objectStoreNames.contains('crdt_store')) {
