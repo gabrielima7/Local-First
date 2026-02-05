@@ -1,0 +1,9 @@
+
+> client-react@0.0.0 dev
+> vite --port 5174
+
+
+  VITE v5.4.21  ready in 293 ms
+
+  ➜  Local:   http://localhost:5174/
+  ➜  Network: use --host to expose
