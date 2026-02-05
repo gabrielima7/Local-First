@@ -4,3 +4,7 @@
 **/pkg/
 .DS_Store
 *.swp
+
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
