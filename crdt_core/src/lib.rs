@@ -82,6 +82,15 @@ impl CrdtStore {
         Ok(())
     }
 
+    /// Load bulk updates (e.g. from IndexedDB).
+    pub fn load_bulk(&mut self, updates: JsValue) -> Result<(), JsValue> {
+        let messages: Vec<UpdateMessage> = serde_wasm_bindgen::from_value(updates)?;
+        for msg in messages {
+            self.merge_record(msg.key, msg.record);
+        }
+        Ok(())
+    }
+
     /// Merge an incoming update. Returns true if the state changed.
     pub fn merge(&mut self, update: JsValue) -> Result<bool, JsValue> {
         let msg: UpdateMessage = serde_wasm_bindgen::from_value(update)?;
