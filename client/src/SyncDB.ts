@@ -18,6 +18,7 @@ export class SyncDB {
   private crdt: CrdtStore | null = null;
   public readyPromise: Promise<void>;
   private onChangeCallbacks: ((key: string, value: any) => void)[] = [];
+  private lastSeenTimestamp = 0;
 
   constructor(serverUrl: string, nodeId: string) {
     this.ws = new WebSocket(serverUrl);
@@ -60,12 +61,21 @@ export class SyncDB {
     if (validUpdates.length > 0) {
         console.log(`Loading ${validUpdates.length} records from IDB`);
         this.crdt.load_bulk(validUpdates);
+
+        for (const update of validUpdates) {
+          if (update.record && typeof update.record.timestamp === 'number') {
+             if (update.record.timestamp > this.lastSeenTimestamp) {
+                 this.lastSeenTimestamp = update.record.timestamp;
+             }
+          }
+        }
     }
   }
 
   private setupWebSocket() {
     this.ws.onopen = () => {
         console.log('Connected to sync server');
+        this.ws.send(JSON.stringify({ type: 'sync', since: this.lastSeenTimestamp }));
         this.processQueue();
     };
 

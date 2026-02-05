@@ -8,25 +8,35 @@ console.log('Server starting on port 8080');
 wss.on('connection', function connection(ws) {
   console.log('Client connected');
 
-  // Send existing history to the new client
-  // We wrap it in a "catchup" or just send individual updates.
-  // For simplicity, we send them one by one as if they just happened.
-  updates.forEach(msg => {
-    ws.send(msg);
-  });
-
   ws.on('message', function message(data, isBinary) {
     const content = isBinary ? data : data.toString();
-    // console.log('received update');
 
-    // Store
-    updates.push(content);
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (e) {
+      console.error('Invalid JSON received');
+      return;
+    }
 
-    // Broadcast to others
-    wss.clients.forEach(function each(client) {
-      if (client !== ws && client.readyState === 1) { // 1 = OPEN
-        client.send(content, { binary: isBinary });
-      }
-    });
+    if (parsed.type === 'sync') {
+      const since = typeof parsed.since === 'number' ? parsed.since : 0;
+      // Filter and send updates
+      updates.forEach(update => {
+        if (update.record && update.record.timestamp > since) {
+          ws.send(JSON.stringify(update));
+        }
+      });
+    } else {
+      // Store object
+      updates.push(parsed);
+
+      // Broadcast to others
+      wss.clients.forEach(function each(client) {
+        if (client !== ws && client.readyState === 1) { // 1 = OPEN
+          client.send(content, { binary: isBinary });
+        }
+      });
+    }
   });
 });
